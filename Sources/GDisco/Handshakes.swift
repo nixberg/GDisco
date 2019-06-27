@@ -17,30 +17,46 @@ import Foundation
 //  ...
 //  -> e, es, ss
 
-extension Handshake.I {
-    public static func K(my s: KeyPair, their rs: PublicKey) -> Handshake {
+extension Initiator {
+    public class K: Handshake {
+        let s: KeyPair
         let e = KeyPair()
-        return Handshake("K", .initiator, [
-            .write({
-                $1.append(e.publicKey.data)
-                $0.mixHash(e.publicKey.data)
-                $0.mixKey(e.DH(their: rs))
-                $0.mixKey(s.DH(their: rs))
-            })
-        ])
+        let rs: PublicKey
+
+        public init(my s: KeyPair, their rs: PublicKey) {
+            self.s = s
+            self.rs = rs
+            super.init(.initiator, "K")
+        }
+        
+        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+            operation(order: 1)
+            buffer.append(contentsOf: e.publicKey.data)
+            symmetricState.mixHash(e.publicKey.data)
+            symmetricState.mixKey(e.DH(rs))
+            symmetricState.mixKey(s.DH(rs))
+        }
     }
 }
 
-extension Handshake.R {
-    public static func K(my s: KeyPair, their rs: PublicKey) -> Handshake {
-        return Handshake("K", .responder, [
-            .read({
-                let re = try PublicKey(from: $1)
-                $0.mixHash(re.data)
-                $0.mixKey(s.DH(their: re))
-                $0.mixKey(s.DH(their: rs))
-            })
-        ])
+extension Responder {
+    public class K: Handshake {
+        let s: KeyPair
+        let rs: PublicKey
+        
+        public init(my s: KeyPair, their rs: PublicKey) {
+            self.s = s
+            self.rs = rs
+            super.init(.responder, "K")
+        }
+        
+        public func read<D: DataProtocol>(from buffer: D) {
+            operation(order: 1)
+            let re = PublicKey(from: buffer)
+            symmetricState.mixHash(re.data)
+            symmetricState.mixKey(s.DH(re))
+            symmetricState.mixKey(s.DH(rs))
+        }
     }
 }
 
@@ -50,28 +66,41 @@ extension Handshake.R {
 //  ...
 //  -> e, es
 
-extension Handshake.I {
-    public static func N(their rs: PublicKey) -> Handshake {
+extension Initiator {
+    public class N: Handshake {
         let e = KeyPair()
-        return Handshake("N", .initiator, [
-            .write({
-                $1.append(e.publicKey.data)
-                $0.mixHash(e.publicKey.data)
-                $0.mixKey(e.DH(their: rs))
-            })
-        ])
+        let rs: PublicKey
+
+        public init(their rs: PublicKey) {
+            self.rs = rs
+            super.init(.initiator, "N")
+        }
+        
+        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+            operation(order: 1)
+            buffer.append(contentsOf: e.publicKey.data)
+            symmetricState.mixHash(e.publicKey.data)
+            symmetricState.mixKey(e.DH(rs))
+        }
     }
 }
 
-extension Handshake.R {
-    public static func N(my s: KeyPair) -> Handshake {
-        return Handshake("N", .responder, [
-            .read({
-                let re = try PublicKey(from: $1)
-                $0.mixHash(re.data)
-                $0.mixKey(s.DH(their: re))
-            })
-        ])
+extension Responder {
+    public class N: Handshake {
+        let s: KeyPair
+        let e = KeyPair()
+        
+        public init(my s: KeyPair) {
+            self.s = s
+            super.init(.responder, "N")
+        }
+        
+        public func read<D: DataProtocol>(from buffer: D) {
+            operation(order: 1)
+            let re = PublicKey(from: buffer)
+            symmetricState.mixHash(re.data)
+            symmetricState.mixKey(s.DH(re))
+        }
     }
 }
 
@@ -81,33 +110,50 @@ extension Handshake.R {
 //  ...
 //  -> e, es, s, ss
 
-extension Handshake.I {
-    public static func X(my s: KeyPair, their rs: PublicKey) -> Handshake {
+extension Initiator {
+    public class X: Handshake {
+        let s: KeyPair
         let e = KeyPair()
-        return Handshake("X", .initiator, [
-            .write({
-                $1.append(e.publicKey.data)
-                $0.mixHash(e.publicKey.data)
-                $0.mixKey(e.DH(their: rs))
-                $0.encryptAndHash(s.publicKey.data, into: &$1)
-                $0.mixKey(s.DH(their: rs))
-            })
-        ])
+        let rs: PublicKey
+        
+        public init(my s: KeyPair, their rs: PublicKey) {
+            self.s = s
+            self.rs = rs
+            super.init(.initiator, "X")
+        }
+        
+        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+            longOperation(order: 1)
+            buffer.append(contentsOf: e.publicKey.data)
+            symmetricState.mixHash(e.publicKey.data)
+            symmetricState.mixKey(e.DH(rs))
+            symmetricState.encryptAndHash(s.publicKey.data, into: &buffer) // TODO: offfset!
+            symmetricState.mixKey(s.DH(rs))
+        }
     }
 }
 
-extension Handshake.R {
-    public static func X(my s: KeyPair) -> Handshake {
-        return Handshake("X", .responder, [
-            .readStatic({
-                let re = try PublicKey(from: $1)
-                $0.mixHash(re.data)
-                $0.mixKey(s.DH(their: re))
-                let rs = try PublicKey(from: try $0.decryptAndHash($1.advanced(by: 32)))
-                $0.mixKey(s.DH(their: rs))
-                return (64, rs)
-            })
-        ])
+extension Responder {
+    public class X: Handshake {
+        let s: KeyPair
+        
+        public var rs: PublicKey?
+        
+        public init(my s: KeyPair) {
+            self.s = s
+            super.init(.responder, "X")
+        }
+        
+        public func read<D: DataProtocol>(from buffer: D) throws {
+            longOperation(order: 1)
+            let re = PublicKey(from: buffer)
+            symmetricState.mixHash(re.data)
+            symmetricState.mixKey(s.DH(re))
+            let suffix = buffer.suffix(buffer.count - PublicKey.length)
+            rs = PublicKey(from: try symmetricState.decryptAndHash(suffix))
+            symmetricState.mixKey(s.DH(rs!))
+            offset = 2 * PublicKey.length + 16
+        }
     }
 }
 
@@ -116,40 +162,56 @@ extension Handshake.R {
 //  -> e
 //  <- e, ee, psk
 
-extension Handshake.I {
-    public static func NNpsk2(psk: Data) -> Handshake {
+extension Initiator {
+    public class NNpsk2: Handshake {
+        let psk: [UInt8]
         let e = KeyPair()
-        return Handshake("NNpsk2", .initiator, [
-            .write({
-                $1.append(e.publicKey.data)
-                $0.mixHash(e.publicKey.data)
-            }),
-            .read({
-                let re = try PublicKey(from: $1)
-                $0.mixHash(re.data)
-                $0.mixKey(e.DH(their: re))
-                $0.mixKey(psk)
-            })
-        ])
+        
+        public init<D: DataProtocol>(psk: D) {
+            self.psk = .init(psk)
+            super.init(.initiator, "NNpsk2")
+        }
+        
+        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+            operation(order: 1)
+            buffer.append(contentsOf: e.publicKey.data)
+            symmetricState.mixHash(e.publicKey.data)
+        }
+        
+        public func read<D: DataProtocol>(from buffer: D) {
+            operation(order: 2)
+            let re = PublicKey(from: buffer)
+            symmetricState.mixHash(re.data)
+            symmetricState.mixKey(e.DH(re))
+            symmetricState.mixKey(psk)
+        }
     }
 }
 
-extension Handshake.R {
-    public static func NNpsk2(psk: Data) -> Handshake {
+extension Responder {
+    public class NNpsk2: Handshake {
+        let psk: [UInt8]
         let e = KeyPair()
-        var re: PublicKey? = nil
-        return Handshake("NNpsk2", .responder, [
-            .read({
-                re = try PublicKey(from: $1)
-                $0.mixHash(re!.data)
-            }),
-            .write({
-                $1.append(e.publicKey.data)
-                $0.mixHash(e.publicKey.data)
-                $0.mixKey(e.DH(their: re!))
-                $0.mixKey(psk)
-            })
-        ])
+        var re: PublicKey?
+        
+        public init<D: DataProtocol>(psk: D) {
+            self.psk = .init(psk)
+            super.init(.responder, "NNpsk2")
+        }
+        
+        public func read<D: DataProtocol>(from buffer: D) {
+            operation(order: 1)
+            re = PublicKey(from: buffer)
+            symmetricState.mixHash(re!.data)
+        }
+        
+        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+            operation(order: 2)
+            buffer.append(contentsOf: e.publicKey.data)
+            symmetricState.mixHash(e.publicKey.data)
+            symmetricState.mixKey(e.DH(re!))
+            symmetricState.mixKey(psk)
+        }
     }
 }
 
@@ -161,44 +223,64 @@ extension Handshake.R {
 //  -> e, es, ss
 //  <- e, ee, se
 
-extension Handshake.I {
-    public static func KK(my s: KeyPair, their rs: PublicKey) -> Handshake {
+extension Initiator {
+    public class KK: Handshake {
+        let s: KeyPair
         let e = KeyPair()
-        return Handshake("KK", .initiator, [
-            .write({
-                $1.append(e.publicKey.data)
-                $0.mixHash(e.publicKey.data)
-                $0.mixKey(e.DH(their: rs))
-                $0.mixKey(s.DH(their: rs))
-            }),
-            .read({
-                let re = try PublicKey(from: $1)
-                $0.mixHash(re.data)
-                $0.mixKey(e.DH(their: re))
-                $0.mixKey(s.DH(their: re))
-            })
-        ])
+        let rs: PublicKey
+        
+        public init(my s: KeyPair, their rs: PublicKey) {
+            self.s = s
+            self.rs = rs
+            super.init(.initiator, "KK")
+        }
+        
+        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+            operation(order: 1)
+            buffer.append(contentsOf: e.publicKey.data)
+            symmetricState.mixHash(e.publicKey.data)
+            symmetricState.mixKey(e.DH(rs))
+            symmetricState.mixKey(s.DH(rs))
+        }
+        
+        public func read<D: DataProtocol>(from buffer: D) {
+            operation(order: 2)
+            let re = PublicKey(from: buffer)
+            symmetricState.mixHash(re.data)
+            symmetricState.mixKey(e.DH(re))
+            symmetricState.mixKey(s.DH(re))
+        }
     }
 }
 
-extension Handshake.R {
-    public static func KK(my s: KeyPair, their rs: PublicKey) -> Handshake {
+extension Responder {
+    public class KK: Handshake {
+        let s: KeyPair
         let e = KeyPair()
-        var re: PublicKey? = nil
-        return Handshake("KK", .responder, [
-            .read({
-                re = try PublicKey(from: $1)
-                $0.mixHash(re!.data)
-                $0.mixKey(s.DH(their: re!))
-                $0.mixKey(s.DH(their: rs))
-            }),
-            .write({
-                $1.append(e.publicKey.data)
-                $0.mixHash(e.publicKey.data)
-                $0.mixKey(e.DH(their: re!))
-                $0.mixKey(e.DH(their: rs))
-            })
-        ])
+        let rs: PublicKey
+        var re: PublicKey?
+
+        public init(my s: KeyPair, their rs: PublicKey) {
+            self.s = s
+            self.rs = rs
+            super.init(.responder, "KK")
+        }
+        
+        public func read<D: DataProtocol>(from buffer: D) {
+            operation(order: 1)
+            re = PublicKey(from: buffer)
+            symmetricState.mixHash(re!.data)
+            symmetricState.mixKey(s.DH(re!))
+            symmetricState.mixKey(s.DH(rs))
+        }
+        
+        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+            operation(order: 2)
+            buffer.append(contentsOf: e.publicKey.data)
+            symmetricState.mixHash(e.publicKey.data)
+            symmetricState.mixKey(e.DH(re!))
+            symmetricState.mixKey(e.DH(rs))
+        }
     }
 }
 
@@ -209,144 +291,197 @@ extension Handshake.R {
 //  -> e, es
 //  <- e, ee
 
-extension Handshake.I {
-    public static func NK(their rs: PublicKey) -> Handshake {
+extension Initiator {
+    public class NK: Handshake {
         let e = KeyPair()
-        return Handshake("NK", .initiator, [
-            .write({
-                $1.append(e.publicKey.data)
-                $0.mixHash(e.publicKey.data)
-                $0.mixKey(e.DH(their: rs))
-            }),
-            .read({
-                let re = try PublicKey(from: $1)
-                $0.mixHash(re.data)
-                $0.mixKey(e.DH(their: re))
-            })
-        ])
+        let rs: PublicKey
+        
+        public init(their rs: PublicKey) {
+            self.rs = rs
+            super.init(.initiator, "NK")
+        }
+        
+        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+            operation(order: 1)
+            buffer.append(contentsOf: e.publicKey.data)
+            symmetricState.mixHash(e.publicKey.data)
+            symmetricState.mixKey(e.DH(rs))
+        }
+        
+        public func read<D: DataProtocol>(from buffer: D) {
+            operation(order: 2)
+            let re = PublicKey(from: buffer)
+            symmetricState.mixHash(re.data)
+            symmetricState.mixKey(e.DH(re))
+        }
     }
 }
 
-extension Handshake.R {
-    public static func NK(my s: KeyPair) -> Handshake {
+extension Responder {
+    public class NK: Handshake {
+        let s: KeyPair
         let e = KeyPair()
-        var re: PublicKey? = nil
-        return Handshake("NK", .responder, [
-            .read({
-                re = try PublicKey(from: $1)
-                $0.mixHash(re!.data)
-                $0.mixKey(s.DH(their: re!))
-            }),
-            .write({
-                $1.append(e.publicKey.data)
-                $0.mixHash(e.publicKey.data)
-                $0.mixKey(e.DH(their: re!))
-            })
-        ])
+        var re: PublicKey?
+        
+        public init(my s: KeyPair) {
+            self.s = s
+            super.init(.responder, "NK")
+        }
+        
+        public func read<D: DataProtocol>(from buffer: D) {
+            operation(order: 1)
+            re = PublicKey(from: buffer)
+            symmetricState.mixHash(re!.data)
+            symmetricState.mixKey(s.DH(re!))
+        }
+        
+        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+            operation(order: 2)
+            buffer.append(contentsOf: e.publicKey.data)
+            symmetricState.mixHash(e.publicKey.data)
+            symmetricState.mixKey(e.DH(re!))
+        }
     }
 }
-
 
 // NX:
 //  -> e
 //  <- e, ee, s, es
 
-extension Handshake.I {
-    public static func NX() -> Handshake {
+extension Initiator {
+    public class NX: Handshake {
         let e = KeyPair()
-        return Handshake("NX", .initiator, [
-            .write({
-                $1.append(e.publicKey.data)
-                $0.mixHash(e.publicKey.data)
-            }),
-            .readStatic({
-                let re = try PublicKey(from: $1)
-                $0.mixHash(re.data)
-                $0.mixKey(e.DH(their: re))
-                let rs = try PublicKey(from: try $0.decryptAndHash($1.advanced(by: 32)))
-                $0.mixKey(e.DH(their: rs))
-                return (64, rs)
-            })
-        ])
+        
+        public var rs: PublicKey?
+        
+        public init() {
+            super.init(.initiator, "NX")
+        }
+        
+        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+            operation(order: 1)
+            buffer.append(contentsOf: e.publicKey.data)
+            symmetricState.mixHash(e.publicKey.data)
+        }
+        
+        public func read<D: DataProtocol>(from buffer: D) throws {
+            longOperation(order: 2)
+            let re = PublicKey(from: buffer)
+            symmetricState.mixHash(re.data)
+            symmetricState.mixKey(e.DH(re))
+            let suffix = buffer.suffix(buffer.count - PublicKey.length)
+            rs = PublicKey(from: try symmetricState.decryptAndHash(suffix))
+            symmetricState.mixKey(e.DH(rs!))
+        }
     }
 }
 
-extension Handshake.R {
-    public static func NX(my s: KeyPair) -> Handshake {
+extension Responder {
+    public class NX: Handshake {
+        let s: KeyPair
         let e = KeyPair()
-        var re: PublicKey? = nil
-        return Handshake("NX", .responder, [
-            .read({
-                re = try PublicKey(from: $1)
-                $0.mixHash(re!.data)
-            }),
-            .write({
-                $1.append(e.publicKey.data)
-                $0.mixHash(e.publicKey.data)
-                $0.mixKey(e.DH(their: re!))
-                $0.encryptAndHash(s.publicKey.data, into: &$1)
-                $0.mixKey(s.DH(their: re!))
-            })
-        ])
+        var re: PublicKey?
+
+        public init(my s: KeyPair) {
+            self.s = s
+            super.init(.responder, "NX")
+        }
+        
+        public func read<D: DataProtocol>(from buffer: D) {
+            operation(order: 1)
+            re = PublicKey(from: buffer)
+            symmetricState.mixHash(re!.data)
+        }
+        
+        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+            longOperation(order: 2)
+            buffer.append(contentsOf: e.publicKey.data)
+            symmetricState.mixHash(e.publicKey.data)
+            symmetricState.mixKey(e.DH(re!))
+            symmetricState.encryptAndHash(s.publicKey.data, into: &buffer)
+            symmetricState.mixKey(s.DH(re!))
+        }
     }
 }
 
 
-// NX:
+// XX:
 //  -> e
 //  <- e, ee, s, es
 //  -> s, se
 
-extension Handshake.I {
-    public static func XX(my s: KeyPair) -> Handshake {
+extension Initiator {
+    public class XX: Handshake {
+        let s: KeyPair
         let e = KeyPair()
-        var re: PublicKey? = nil
-        return Handshake("XX", .initiator, [
-            .write({
-                $1.append(e.publicKey.data)
-                $0.mixHash(e.publicKey.data)
-            }),
-            .readStatic({
-                re = try PublicKey(from: $1)
-                $0.mixHash(re!.data)
-                $0.mixKey(e.DH(their: re!))
-                let rs = try PublicKey(from: try $0.decryptAndHash($1.advanced(by: 32)))
-                $0.mixKey(e.DH(their: rs))
-                return (64, rs)
-            }),
-            .write({
-                $0.encryptAndHash(s.publicKey.data, into: &$1)
-                $0.mixKey(s.DH(their: re!))
-            }),
-        ])
+        var re: PublicKey?
+        
+        public var rs: PublicKey?
+        
+        public init(my s: KeyPair) {
+            self.s = s
+            super.init(.initiator, "XX")
+        }
+        
+        public func firstWrite<M: MutableDataProtocol>(to buffer: inout M) {
+            operation(order: 1)
+            buffer.append(contentsOf: e.publicKey.data)
+            symmetricState.mixHash(e.publicKey.data)
+        }
+        
+        public func read<D: DataProtocol>(from buffer: D) throws {
+            longOperation(order: 2)
+            re = PublicKey(from: buffer)
+            symmetricState.mixHash(re!.data)
+            symmetricState.mixKey(e.DH(re!))
+            let suffix = buffer.suffix(buffer.count - PublicKey.length)
+            rs = PublicKey(from: try symmetricState.decryptAndHash(suffix))
+            symmetricState.mixKey(e.DH(rs!))
+        }
+        
+        public func secondWrite<M: MutableDataProtocol>(to buffer: inout M) {
+            operation(order: 3)
+            symmetricState.encryptAndHash(s.publicKey.data, into: &buffer)
+            symmetricState.mixKey(s.DH(re!))
+        }
     }
 }
 
-extension Handshake.R {
-    public static func XX(my s: KeyPair) -> Handshake {
+extension Responder {
+    public class XX: Handshake {
+        let s: KeyPair
         let e = KeyPair()
-        var re: PublicKey? = nil
-        return Handshake("XX", .responder, [
-            .read({
-                re = try PublicKey(from: $1)
-                $0.mixHash(re!.data)
-            }),
-            .write({
-                $1.append(e.publicKey.data)
-                $0.mixHash(e.publicKey.data)
-                $0.mixKey(e.DH(their: re!))
-                $0.encryptAndHash(s.publicKey.data, into: &$1)
-                $0.mixKey(s.DH(their: re!))
-            }),
-            .readStatic({
-                let rs = try PublicKey(from: try $0.decryptAndHash($1))
-                $0.mixKey(e.DH(their: rs))
-                return (32, rs)
-            }),
-        ])
+        var re: PublicKey?
+        
+        public var rs: PublicKey?
+
+        public init(my s: KeyPair) {
+            self.s = s
+            super.init(.responder, "XX")
+        }
+        
+        public func firstRead<D: DataProtocol>(from buffer: D) {
+            operation(order: 1)
+            re = PublicKey(from: buffer)
+            symmetricState.mixHash(re!.data)
+        }
+        
+        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+            longOperation(order: 2)
+            buffer.append(contentsOf: e.publicKey.data)
+            symmetricState.mixHash(e.publicKey.data)
+            symmetricState.mixKey(e.DH(re!))
+            symmetricState.encryptAndHash(s.publicKey.data, into: &buffer)
+            symmetricState.mixKey(s.DH(re!))
+        }
+        
+        public func secondRead<D: DataProtocol>(from buffer: D) throws {
+            operation(order: 3)
+            rs = PublicKey(from: try symmetricState.decryptAndHash(buffer))
+            symmetricState.mixKey(e.DH(rs!))
+        }
     }
 }
-
 
 // IK:
 //  <- s
@@ -354,47 +489,67 @@ extension Handshake.R {
 //  -> e, es, s, ss
 //  <- e, ee, se
 
-extension Handshake.I {
-    public static func IK(my s: KeyPair, their rs: PublicKey) -> Handshake {
+extension Initiator {
+    public class IK: Handshake {
+        let s: KeyPair
         let e = KeyPair()
-        return Handshake("IK", .initiator, [
-            .write({
-                $1.append(e.publicKey.data)
-                $0.mixHash(e.publicKey.data)
-                $0.mixKey(e.DH(their: rs))
-                $0.encryptAndHash(s.publicKey.data, into: &$1)
-                $0.mixKey(s.DH(their: rs))
-            }),
-            .read({
-                let re = try PublicKey(from: $1)
-                $0.mixHash(re.data)
-                $0.mixKey(e.DH(their: re))
-                $0.mixKey(s.DH(their: re))
-            })
-        ])
+        let rs: PublicKey
+        var re: PublicKey?
+        
+        public init(my s: KeyPair, their rs: PublicKey) {
+            self.s = s
+            self.rs = rs
+            super.init(.initiator, "IK")
+        }
+        
+        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+            longOperation(order: 1)
+            buffer.append(contentsOf: e.publicKey.data)
+            symmetricState.mixHash(e.publicKey.data)
+            symmetricState.mixKey(e.DH(rs))
+            symmetricState.encryptAndHash(s.publicKey.data, into: &buffer)
+            symmetricState.mixKey(s.DH(rs))
+        }
+        
+        public func read<D: DataProtocol>(from buffer: D) {
+            operation(order: 2)
+            let re = PublicKey(from: buffer)
+            symmetricState.mixHash(re.data)
+            symmetricState.mixKey(e.DH(re))
+            symmetricState.mixKey(s.DH(re))
+        }
     }
 }
 
-extension Handshake.R {
-    public static func IK(my s: KeyPair) -> Handshake {
+extension Responder {
+    public class IK: Handshake {
+        let s: KeyPair
         let e = KeyPair()
-        var re: PublicKey? = nil
-        var rs: PublicKey? = nil
-        return Handshake("IK", .responder, [
-            .readStatic({
-                re = try PublicKey(from: $1)
-                $0.mixHash(re!.data)
-                $0.mixKey(s.DH(their: re!))
-                rs = try PublicKey(from: try $0.decryptAndHash($1.advanced(by: 32)))
-                $0.mixKey(s.DH(their: rs!))
-                return (64, rs!)
-            }),
-            .write({
-                $1.append(e.publicKey.data)
-                $0.mixHash(e.publicKey.data)
-                $0.mixKey(e.DH(their: re!))
-                $0.mixKey(e.DH(their: rs!))
-            })
-        ])
+        var re: PublicKey?
+        
+        public var rs: PublicKey?
+
+        public init(my s: KeyPair) {
+            self.s = s
+            super.init(.responder, "IK")
+        }
+        
+        public func read<D: DataProtocol>(from buffer: D) throws {
+            longOperation(order: 1)
+            re = PublicKey(from: buffer)
+            symmetricState.mixHash(re!.data)
+            symmetricState.mixKey(s.DH(re!))
+            let suffix = buffer.suffix(buffer.count - PublicKey.length)
+            rs = PublicKey(from: try symmetricState.decryptAndHash(suffix))
+            symmetricState.mixKey(s.DH(rs!))
+        }
+        
+        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+            operation(order: 2)
+            buffer.append(contentsOf: e.publicKey.data)
+            symmetricState.mixHash(e.publicKey.data)
+            symmetricState.mixKey(e.DH(re!))
+            symmetricState.mixKey(e.DH(rs!))
+        }
     }
 }

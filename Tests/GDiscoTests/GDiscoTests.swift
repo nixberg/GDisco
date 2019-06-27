@@ -5,12 +5,12 @@ final class GDiscoTests: XCTestCase {
     let iStatic = KeyPair()
     let rStatic = KeyPair()
     
-    func greet(_ a: Handshake, _ b: Handshake, line: UInt = #line) {
-        let a = a.finalize()
-        let b = b.finalize()
+    func greet(_ i: Handshake, _ r: Handshake, line: UInt = #line) {
+        let a = i.finalize()
+        let b = r.finalize()
         
         let m1 = "Hi, Bob!".data(using: .utf8)!
-        let m2 = "Also, ...".data(using: .utf8)!
+        let m2 = "Also ...".data(using: .utf8)!
 
         var e1 = Data()
         var e2 = Data()
@@ -24,10 +24,10 @@ final class GDiscoTests: XCTestCase {
         XCTAssertEqual(m1, d1, line: line)
         XCTAssertEqual(m2, d2, line: line)
         
-        e1 = Data()
-        e2 = Data()
-        d1 = Data()
-        d2 = Data()
+        e1.removeAll(keepingCapacity: true)
+        e2.removeAll(keepingCapacity: true)
+        d1.removeAll(keepingCapacity: true)
+        d2.removeAll(keepingCapacity: true)
         
         b.encrypt(plaintext: m1, into: &e1)
         b.encrypt(plaintext: m2, into: &e2)
@@ -38,134 +38,132 @@ final class GDiscoTests: XCTestCase {
     }
     
     func testK() {
-        let iHandshake = Handshake.I.K(my: iStatic, their: rStatic.publicKey)
-        let rHandshake = Handshake.R.K(my: rStatic, their: iStatic.publicKey)
+        let initiator = Initiator.K(my: iStatic, their: rStatic.publicKey)
+        let responder = Responder.K(my: rStatic, their: iStatic.publicKey)
         
         var networkBuffer = Data()
-        iHandshake.write(to: &networkBuffer)
-        try! rHandshake.read(from: networkBuffer)
-        
-        greet(iHandshake, rHandshake)
+        initiator.write(to: &networkBuffer)
+        responder.read(from: networkBuffer)
+                
+        greet(initiator, responder)
     }
     
     func testN() {
-        let iHandshake = Handshake.I.N(their: rStatic.publicKey)
-        let rHandshake = Handshake.R.N(my: rStatic)
+        let initiator = Initiator.N(their: rStatic.publicKey)
+        let responder = Responder.N(my: rStatic)
         
         var networkBuffer = Data()
-        iHandshake.write(to: &networkBuffer)
-        try! rHandshake.read(from: networkBuffer)
+        initiator.write(to: &networkBuffer)
+        responder.read(from: networkBuffer)
         
-        greet(iHandshake, rHandshake)
+        greet(initiator, responder)
     }
     
     func testX() {
-        let iHandshake = Handshake.I.X(my: iStatic, their: rStatic.publicKey)
-        let rHandshake = Handshake.R.X(my: rStatic)
+        let initiator = Initiator.X(my: iStatic, their: rStatic.publicKey)
+        let responder = Responder.X(my: rStatic)
         
         var networkBuffer = Data()
-        iHandshake.write(to: &networkBuffer)
-        let rrs = try! rHandshake.readStatic(from: networkBuffer)
+        initiator.write(to: &networkBuffer)
+        try! responder.read(from: networkBuffer)
         
-        XCTAssertEqual(iStatic.publicKey.data, rrs.data)
-
-        greet(iHandshake, rHandshake)
+        greet(initiator, responder)
     }
     
     func testNNpsk2() {
         let psk = Data.random(count: 32)!
         
-        let iHandshake = Handshake.I.NNpsk2(psk: psk)
-        let rHandshake = Handshake.R.NNpsk2(psk: psk)
+        let initiator = Initiator.NNpsk2(psk: psk)
+        let responder = Responder.NNpsk2(psk: psk)
         
         var networkBuffer = Data()
-        iHandshake.write(to: &networkBuffer)
-        try! rHandshake.read(from: networkBuffer)
+        initiator.write(to: &networkBuffer)
+        responder.read(from: networkBuffer)
+        
         networkBuffer.removeAll(keepingCapacity: true)
-        rHandshake.write(to: &networkBuffer)
-        try! iHandshake.read(from: networkBuffer)
+        responder.write(to: &networkBuffer)
+        initiator.read(from: networkBuffer)
 
-        greet(iHandshake, rHandshake)
+        greet(initiator, responder)
     }
     
     func testKK() {
-        let iHandshake = Handshake.I.KK(my: iStatic, their: rStatic.publicKey)
-        let rHandshake = Handshake.R.KK(my: rStatic, their: iStatic.publicKey)
+        let initiator = Initiator.KK(my: iStatic, their: rStatic.publicKey)
+        let responder = Responder.KK(my: rStatic, their: iStatic.publicKey)
         
         var networkBuffer = Data()
-        iHandshake.write(to: &networkBuffer)
-        try! rHandshake.read(from: networkBuffer)
-        networkBuffer.removeAll(keepingCapacity: true)
-        rHandshake.write(to: &networkBuffer)
-        try! iHandshake.read(from: networkBuffer)
+        initiator.write(to: &networkBuffer)
+        responder.read(from: networkBuffer)
         
-        greet(iHandshake, rHandshake)
+        networkBuffer.removeAll(keepingCapacity: true)
+        responder.write(to: &networkBuffer)
+        initiator.read(from: networkBuffer)
+        
+        greet(initiator, responder)
     }
 
     func testNK() {
-        let iHandshake = Handshake.I.NK(their: rStatic.publicKey)
-        let rHandshake = Handshake.R.NK(my: rStatic)
+        let initiator = Initiator.NK(their: rStatic.publicKey)
+        let responder = Responder.NK(my: rStatic)
         
         var networkBuffer = Data()
-        iHandshake.write(to: &networkBuffer)
-        try! rHandshake.read(from: networkBuffer)
+        initiator.write(to: &networkBuffer)
+        responder.read(from: networkBuffer)
+     
         networkBuffer.removeAll(keepingCapacity: true)
-        rHandshake.write(to: &networkBuffer)
-        try! iHandshake.read(from: networkBuffer)
+        responder.write(to: &networkBuffer)
+        initiator.read(from: networkBuffer)
         
-        greet(iHandshake, rHandshake)
+        greet(initiator, responder)
     }
     
     func testNX() {
-        let iHandshake = Handshake.I.NX()
-        let rHandshake = Handshake.R.NX(my: rStatic)
+        let initiator = Initiator.NX()
+        let responder = Responder.NX(my: rStatic)
         
         var networkBuffer = Data()
-        iHandshake.write(to: &networkBuffer)
-        try! rHandshake.read(from: networkBuffer)
+        initiator.write(to: &networkBuffer)
+        responder.read(from: networkBuffer)
+     
         networkBuffer.removeAll(keepingCapacity: true)
-        rHandshake.write(to: &networkBuffer)
-        let irs = try! iHandshake.readStatic(from: networkBuffer)
+        responder.write(to: &networkBuffer)
+        try! initiator.read(from: networkBuffer)
         
-        XCTAssertEqual(rStatic.publicKey.data, irs.data)
-
-        greet(iHandshake, rHandshake)
+        greet(initiator, responder)
     }
     
     func testXX() {
-        let iHandshake = Handshake.I.XX(my: iStatic)
-        let rHandshake = Handshake.R.XX(my: rStatic)
+        let initiator = Initiator.XX(my: iStatic)
+        let responder = Responder.XX(my: rStatic)
 
         var networkBuffer = Data()
-        iHandshake.write(to: &networkBuffer)
-        try! rHandshake.read(from: networkBuffer)
+        initiator.firstWrite(to: &networkBuffer)
+        responder.firstRead(from: networkBuffer)
+     
         networkBuffer.removeAll(keepingCapacity: true)
-        rHandshake.write(to: &networkBuffer)
-        let irs = try! iHandshake.readStatic(from: networkBuffer)
-        networkBuffer.removeAll(keepingCapacity: true)
-        iHandshake.write(to: &networkBuffer)
-        let rrs = try! rHandshake.readStatic(from: networkBuffer)
+        responder.write(to: &networkBuffer)
+        try! initiator.read(from: networkBuffer)
         
-        XCTAssertEqual(iStatic.publicKey.data, rrs.data)
-        XCTAssertEqual(rStatic.publicKey.data, irs.data)
-
-        greet(iHandshake, rHandshake)
+        networkBuffer.removeAll(keepingCapacity: true)
+        initiator.secondWrite(to: &networkBuffer)
+        try! responder.secondRead(from: networkBuffer)
+        
+        greet(initiator, responder)
     }
     
     func testIK() {
-        let iHandshake = Handshake.I.IK(my: iStatic, their: rStatic.publicKey)
-        let rHandshake = Handshake.R.IK(my: rStatic)
+        let initiator = Initiator.IK(my: iStatic, their: rStatic.publicKey)
+        let responder = Responder.IK(my: rStatic)
         
         var networkBuffer = Data()
-        iHandshake.write(to: &networkBuffer)
-        let rrs = try! rHandshake.readStatic(from: networkBuffer)
+        initiator.write(to: &networkBuffer)
+        try! responder.read(from: networkBuffer)
+        
         networkBuffer.removeAll(keepingCapacity: true)
-        rHandshake.write(to: &networkBuffer)
-        try! iHandshake.read(from: networkBuffer)
+        responder.write(to: &networkBuffer)
+        initiator.read(from: networkBuffer)
         
-        XCTAssertEqual(iStatic.publicKey.data, rrs.data)
-        
-        greet(iHandshake, rHandshake)
+        greet(initiator, responder)
     }
     
     static var allTests = [

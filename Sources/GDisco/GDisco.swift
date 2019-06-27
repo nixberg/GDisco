@@ -1,7 +1,7 @@
 import Foundation
 import GStrobe
 
-enum Error : Swift.Error {
+enum GDiscoError : Swift.Error {
     case payloadTooLong
     case messageTooShort
     case badMAC
@@ -26,13 +26,13 @@ public final class GDisco {
         self.receiver = receiver
     }
     
-    // NOTE: Spec forgets about `ad`.
-    public func encrypt(additionalData: Data? = nil, plaintext: Data, into ciphertext: inout Data) {
+    public func encrypt<D: DataProtocol, MD: MutableDataProtocol>
+        (additionalData: D? = nil, plaintext: D, into ciphertext: inout MD) {
         precondition(!aborted)
         precondition(plaintext.count + 16 <= GDisco.maximumMessageLength)
         precondition(senderNonce < UInt64.max)
         
-        let ephemeralStrobe = GStrobe(cloning: sender)
+        let ephemeralStrobe = GStrobe(from: sender)
         ephemeralStrobe.additionalData(senderNonce.data())
         if let additionalData = additionalData {
             ephemeralStrobe.additionalData(additionalData)
@@ -42,22 +42,22 @@ public final class GDisco {
         senderNonce += 1
     }
     
-    public func decrypt(additionalData: Data? = nil, ciphertext: Data, into plaintext: inout Data) throws {
+    public func decrypt<D: DataProtocol, MD: MutableDataProtocol>
+        (additionalData: D? = nil, ciphertext: D, into plaintext: inout MD) throws {
         precondition(!aborted)
         precondition(ciphertext.count >= 16)
         precondition(ciphertext.count <= GDisco.maximumMessageLength)
         precondition(receiverNonce < UInt64.max)
         
-        let ephemeralStrobe = GStrobe(cloning: receiver)
+        let ephemeralStrobe = GStrobe(from: receiver)
         ephemeralStrobe.additionalData(receiverNonce.data())
         if let additionalData = additionalData {
             ephemeralStrobe.additionalData(additionalData)
         }
-        let macIndex = ciphertext.endIndex - 16
-        ephemeralStrobe.receive(ciphertext[..<macIndex], into: &plaintext)
-        guard ephemeralStrobe.receiveMAC(ciphertext[macIndex...]) else {
+        ephemeralStrobe.receive(ciphertext.prefix(ciphertext.count - 16), into: &plaintext)
+        guard ephemeralStrobe.receiveMAC(ciphertext.suffix(16)) else {
             aborted = true
-            throw Error.badMAC
+            throw GDiscoError.badMAC
         }
         receiverNonce += 1
     }

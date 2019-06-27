@@ -2,6 +2,8 @@ import Foundation
 import GStrobe
 
 public final class SymmetricState {
+    static let macLength = 16
+    
     let strobe: GStrobe
     var isKeyed = false
     
@@ -9,47 +11,56 @@ public final class SymmetricState {
         strobe = GStrobe(customization: GDisco.protocolName(for: pattern))
     }
     
-    func mixKey(_ key: Data) {
+    func mixKey<D: DataProtocol>(_ key: D) {
         strobe.additionalData(key) // NOTE: .key?
         isKeyed = true
     }
     
-    func mixHash(_ data: Data) {
+    func mixHash<D: DataProtocol>(_ data: D) {
         strobe.additionalData(data)
     }
     
-    func encryptAndHash(_ plaintext: Data, into ciphertext: inout Data) {
+    func encryptAndHash<D: DataProtocol, MD: MutableDataProtocol>
+        (_ plaintext: D, into ciphertext: inout MD) {
         precondition(isKeyed)
         strobe.send(plaintext, into: &ciphertext)
-        strobe.sendMAC(&ciphertext, count: 16)
+        strobe.sendMAC(&ciphertext, count: SymmetricState.macLength)
     }
     
-    func decryptAndHash(_ ciphertext: Data) throws -> Data {
-        var data = Data(capacity: ciphertext.count - 16)
+    func decryptAndHash<D: DataProtocol>(_ ciphertext: D) throws -> [UInt8] { // TODO: some DataProtocol
+        var data = [UInt8]()
+        data.reserveCapacity(ciphertext.count - SymmetricState.macLength)
         try decryptAndHash(ciphertext, into: &data)
         return data
     }
     
-    func decryptAndHash(_ ciphertext: Data, into plaintext: inout Data) throws {
+    func decryptAndHash<D: DataProtocol, MD: MutableDataProtocol>
+        (_ ciphertext: D, into plaintext: inout MD) throws {
         precondition(isKeyed)
-        guard ciphertext.count >= 16 else {
-            throw Error.messageTooShort
+        guard ciphertext.count >= SymmetricState.macLength else {
+            throw GDiscoError.messageTooShort
         }
-        let macIndex = ciphertext.endIndex - 16
-        strobe.receive(ciphertext[..<macIndex], into: &plaintext)
-        guard strobe.receiveMAC(ciphertext[macIndex...]) else {
-            throw Error.badMAC
+        let prefix = ciphertext.prefix(ciphertext.count - SymmetricState.macLength)
+        strobe.receive(prefix, into: &plaintext)
+        guard strobe.receiveMAC(ciphertext.suffix(SymmetricState.macLength)) else {
+            throw GDiscoError.badMAC
         }
     }
     
     func split() -> (GStrobe, GStrobe) {
         precondition(isKeyed)
         let s1 = strobe
-        let s2 = GStrobe(cloning: strobe)
+        let s2 = GStrobe(from: strobe)
         s1.metaAdditionalData("one".data(using: .utf8)!)
         s2.metaAdditionalData("two".data(using: .utf8)!)
         s1.ratchet(count: 16)
         s2.ratchet(count: 16)
         return (s1, s2)
+    }
+}
+
+extension SymmetricState: Equatable {
+    public static func == (lhs: SymmetricState, rhs: SymmetricState) -> Bool {
+        return lhs.strobe == rhs.strobe
     }
 }

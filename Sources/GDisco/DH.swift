@@ -1,44 +1,52 @@
 import Foundation
 import Monocypher
 
-public final class PublicKey {
-    let data: Data
-    
-    public init(from secretKey: SecretKey) {
-        precondition(secretKey.data.count == 32)
-        data = KeyExchange.publicKey(from: secretKey.data)
-    }
-    
-    public init(from data: Data) throws {
-        guard data.count >= 32 else {
-            throw Error.messageTooShort
-        }
-        self.data = data[..<data.startIndex.advanced(by: 32)]
-    }
-}
+// TODO: resetBytes(in:) somewhere?
+// TODO: X25519
 
-public final class SecretKey {
-    let data: Data
+// TODO: Waiting for `newtype`.
+// NOTE: `typealias` is dangerous: For example, it’s possible to override `.init()`. Bug?
+
+public struct SecretKey {
+    static let length = 32
+
+    let data: [UInt8]
     
     public init() {
-        data = Data.random(count: 32)!
+        data = .init(Data.random(count: SecretKey.length)!)
     }
     
-    public func DH(their: PublicKey) -> Data {
-        return KeyExchange.sharedKey(mySecret: data, theirPublic: their.data)!
+    public func publicKey() -> PublicKey {
+        return .init(from: KeyExchange.publicKey(from: Data(data)))
+    }
+    
+    public func DH(_ their: PublicKey) -> [UInt8] {
+        return .init(KeyExchange.sharedKey(mySecret: Data(data), theirPublic: Data(their.data))!)
     }
 }
 
-public final class KeyPair {
+public struct PublicKey {
+    static let length = 32
+
+    let data: [UInt8]
+    
+    public init<D: DataProtocol>(from data: D) {
+        precondition(data.count >= PublicKey.length)
+        self.data = .init(data.prefix(PublicKey.length))
+    }
+}
+
+public struct KeyPair {
     public let publicKey: PublicKey
     public let secretKey: SecretKey
     
     public init() {
-        secretKey = SecretKey()
-        publicKey = PublicKey(from: secretKey)
+        secretKey = .init()
+        publicKey = secretKey.publicKey()
     }
     
-    public func DH(their: PublicKey) -> Data {
-        return secretKey.DH(their: their)
+    public func DH(_ their: PublicKey) -> [UInt8] {
+        return secretKey.DH(their)
     }
 }
+

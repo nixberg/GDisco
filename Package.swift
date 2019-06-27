@@ -1,4 +1,4 @@
-// swift-tools-version:4.2
+// swift-tools-version:5.0
 
 import PackageDescription
 
@@ -10,8 +10,8 @@ let package = Package(
             targets: ["GDisco"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/nixberg/GStrobe", from: "0.0.0"),
-        .package(url: "https://github.com/nixberg/monocypher-swift", from: "0.0.1"),
+        .package(path: "../GStrobe"),
+        .package(url: "https://github.com/nixberg/monocypher-swift", from: "0.0.2"),
     ],
     targets: [
         .target(
