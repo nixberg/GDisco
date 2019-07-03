@@ -1,4 +1,5 @@
 import Foundation
+import Ristretto255
 
 enum Role {
     case initiator
@@ -52,3 +53,25 @@ public class Handshake {
 
 public final class Initiator {}
 public final class Responder {}
+
+// Helper methods:
+
+extension MutableDataProtocol {
+    public mutating func append(_ keyPair: KeyPair) {
+        self.append(contentsOf: keyPair.publicKey.data)
+    }
+}
+
+extension SymmetricState {
+    func mixHash(_ keyPair: KeyPair) {
+        mixHash(keyPair.publicKey.data)
+    }
+    
+    func mixHash(_ publicKey: PublicKey) {
+        mixHash(publicKey.data)
+    }
+    
+    func encryptAndHash<M: MutableDataProtocol>(_ keyPair: KeyPair, into ciphertext: inout M) {
+        encryptAndHash(keyPair.publicKey.data, into: &ciphertext)
+    }
+}

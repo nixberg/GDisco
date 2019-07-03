@@ -10,13 +10,13 @@ let package = Package(
             targets: ["GDisco"]),
     ],
     dependencies: [
-        .package(path: "../GStrobe"),
-        .package(url: "https://github.com/nixberg/monocypher-swift", from: "0.0.2"),
+        .package(url: "https://github.com/nixberg/GStrobe", .branch("master")),
+        .package(url: "https://github.com/nixberg/Ristretto255", .branch("master")),
     ],
     targets: [
         .target(
             name: "GDisco",
-            dependencies: ["GStrobe", "Monocypher"]),
+            dependencies: ["GStrobe", "Ristretto255"]),
         .testTarget(
             name: "GDiscoTests",
             dependencies: ["GDisco"]),

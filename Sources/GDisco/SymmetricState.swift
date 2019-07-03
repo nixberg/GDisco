@@ -27,7 +27,7 @@ public final class SymmetricState {
         strobe.sendMAC(&ciphertext, count: SymmetricState.macLength)
     }
     
-    func decryptAndHash<D: DataProtocol>(_ ciphertext: D) throws -> [UInt8] { // TODO: some DataProtocol
+    func decryptAndHash<D: DataProtocol>(_ ciphertext: D) throws -> [UInt8] { // TODO: some DataProtocol?
         var data = [UInt8]()
         data.reserveCapacity(ciphertext.count - SymmetricState.macLength)
         try decryptAndHash(ciphertext, into: &data)
@@ -56,11 +56,5 @@ public final class SymmetricState {
         s1.ratchet(count: 16)
         s2.ratchet(count: 16)
         return (s1, s2)
-    }
-}
-
-extension SymmetricState: Equatable {
-    public static func == (lhs: SymmetricState, rhs: SymmetricState) -> Bool {
-        return lhs.strobe == rhs.strobe
     }
 }

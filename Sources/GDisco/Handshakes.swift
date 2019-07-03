@@ -1,4 +1,5 @@
 import Foundation
+import Ristretto255
 
 // First character:
 //  N = No static key for initiator
@@ -10,6 +11,7 @@ import Foundation
 //  N = No static key for responder
 //  K = Static key for responder Known to initiator
 //  X = Static key for responder Xmitted ("transmitted") to initiator
+
 
 // K:
 //  -> s
@@ -29,12 +31,12 @@ extension Initiator {
             super.init(.initiator, "K")
         }
         
-        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+        public func write<M: MutableDataProtocol>(to buffer: inout M) throws {
             operation(order: 1)
-            buffer.append(contentsOf: e.publicKey.data)
-            symmetricState.mixHash(e.publicKey.data)
-            symmetricState.mixKey(e.DH(rs))
-            symmetricState.mixKey(s.DH(rs))
+            buffer.append(e)
+            symmetricState.mixHash(e)
+            symmetricState.mixKey(try e ^ rs)
+            symmetricState.mixKey(try s ^ rs)
         }
     }
 }
@@ -50,12 +52,12 @@ extension Responder {
             super.init(.responder, "K")
         }
         
-        public func read<D: DataProtocol>(from buffer: D) {
+        public func read<D: DataProtocol>(from buffer: D) throws {
             operation(order: 1)
-            let re = PublicKey(from: buffer)
-            symmetricState.mixHash(re.data)
-            symmetricState.mixKey(s.DH(re))
-            symmetricState.mixKey(s.DH(rs))
+            let re = try PublicKey(from: buffer)
+            symmetricState.mixHash(re)
+            symmetricState.mixKey(try s ^ re)
+            symmetricState.mixKey(try s ^ rs)
         }
     }
 }
@@ -76,11 +78,11 @@ extension Initiator {
             super.init(.initiator, "N")
         }
         
-        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+        public func write<M: MutableDataProtocol>(to buffer: inout M) throws {
             operation(order: 1)
-            buffer.append(contentsOf: e.publicKey.data)
-            symmetricState.mixHash(e.publicKey.data)
-            symmetricState.mixKey(e.DH(rs))
+            buffer.append(e)
+            symmetricState.mixHash(e)
+            symmetricState.mixKey(try e ^ rs)
         }
     }
 }
@@ -95,11 +97,11 @@ extension Responder {
             super.init(.responder, "N")
         }
         
-        public func read<D: DataProtocol>(from buffer: D) {
+        public func read<D: DataProtocol>(from buffer: D) throws {
             operation(order: 1)
-            let re = PublicKey(from: buffer)
-            symmetricState.mixHash(re.data)
-            symmetricState.mixKey(s.DH(re))
+            let re = try PublicKey(from: buffer)
+            symmetricState.mixHash(re)
+            symmetricState.mixKey(try s ^ re)
         }
     }
 }
@@ -122,13 +124,13 @@ extension Initiator {
             super.init(.initiator, "X")
         }
         
-        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+        public func write<M: MutableDataProtocol>(to buffer: inout M) throws {
             longOperation(order: 1)
-            buffer.append(contentsOf: e.publicKey.data)
-            symmetricState.mixHash(e.publicKey.data)
-            symmetricState.mixKey(e.DH(rs))
-            symmetricState.encryptAndHash(s.publicKey.data, into: &buffer) // TODO: offfset!
-            symmetricState.mixKey(s.DH(rs))
+            buffer.append(e)
+            symmetricState.mixHash(e)
+            symmetricState.mixKey(try e ^ rs)
+            symmetricState.encryptAndHash(s, into: &buffer)
+            symmetricState.mixKey(try s ^ rs)
         }
     }
 }
@@ -146,12 +148,12 @@ extension Responder {
         
         public func read<D: DataProtocol>(from buffer: D) throws {
             longOperation(order: 1)
-            let re = PublicKey(from: buffer)
-            symmetricState.mixHash(re.data)
-            symmetricState.mixKey(s.DH(re))
+            let re = try PublicKey(from: buffer)
+            symmetricState.mixHash(re)
+            symmetricState.mixKey(try s ^ re)
             let suffix = buffer.suffix(buffer.count - PublicKey.length)
-            rs = PublicKey(from: try symmetricState.decryptAndHash(suffix))
-            symmetricState.mixKey(s.DH(rs!))
+            rs = try PublicKey(from: try symmetricState.decryptAndHash(suffix))
+            symmetricState.mixKey(try s ^ rs!)
             offset = 2 * PublicKey.length + 16
         }
     }
@@ -174,15 +176,15 @@ extension Initiator {
         
         public func write<M: MutableDataProtocol>(to buffer: inout M) {
             operation(order: 1)
-            buffer.append(contentsOf: e.publicKey.data)
-            symmetricState.mixHash(e.publicKey.data)
+            buffer.append(e)
+            symmetricState.mixHash(e)
         }
         
-        public func read<D: DataProtocol>(from buffer: D) {
+        public func read<D: DataProtocol>(from buffer: D) throws {
             operation(order: 2)
-            let re = PublicKey(from: buffer)
-            symmetricState.mixHash(re.data)
-            symmetricState.mixKey(e.DH(re))
+            let re = try PublicKey(from: buffer)
+            symmetricState.mixHash(re)
+            symmetricState.mixKey(try e ^ re)
             symmetricState.mixKey(psk)
         }
     }
@@ -199,17 +201,17 @@ extension Responder {
             super.init(.responder, "NNpsk2")
         }
         
-        public func read<D: DataProtocol>(from buffer: D) {
+        public func read<D: DataProtocol>(from buffer: D) throws {
             operation(order: 1)
-            re = PublicKey(from: buffer)
-            symmetricState.mixHash(re!.data)
+            re = try PublicKey(from: buffer)
+            symmetricState.mixHash(re!)
         }
         
-        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+        public func write<M: MutableDataProtocol>(to buffer: inout M) throws {
             operation(order: 2)
-            buffer.append(contentsOf: e.publicKey.data)
-            symmetricState.mixHash(e.publicKey.data)
-            symmetricState.mixKey(e.DH(re!))
+            buffer.append(e)
+            symmetricState.mixHash(e)
+            symmetricState.mixKey(try e ^ re!)
             symmetricState.mixKey(psk)
         }
     }
@@ -235,20 +237,20 @@ extension Initiator {
             super.init(.initiator, "KK")
         }
         
-        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+        public func write<M: MutableDataProtocol>(to buffer: inout M) throws {
             operation(order: 1)
-            buffer.append(contentsOf: e.publicKey.data)
-            symmetricState.mixHash(e.publicKey.data)
-            symmetricState.mixKey(e.DH(rs))
-            symmetricState.mixKey(s.DH(rs))
+            buffer.append(e)
+            symmetricState.mixHash(e)
+            symmetricState.mixKey(try e ^ rs)
+            symmetricState.mixKey(try s ^ rs)
         }
         
-        public func read<D: DataProtocol>(from buffer: D) {
+        public func read<D: DataProtocol>(from buffer: D) throws {
             operation(order: 2)
-            let re = PublicKey(from: buffer)
-            symmetricState.mixHash(re.data)
-            symmetricState.mixKey(e.DH(re))
-            symmetricState.mixKey(s.DH(re))
+            let re = try PublicKey(from: buffer)
+            symmetricState.mixHash(re)
+            symmetricState.mixKey(try e ^ re)
+            symmetricState.mixKey(try s ^ re)
         }
     }
 }
@@ -266,20 +268,20 @@ extension Responder {
             super.init(.responder, "KK")
         }
         
-        public func read<D: DataProtocol>(from buffer: D) {
+        public func read<D: DataProtocol>(from buffer: D) throws {
             operation(order: 1)
-            re = PublicKey(from: buffer)
-            symmetricState.mixHash(re!.data)
-            symmetricState.mixKey(s.DH(re!))
-            symmetricState.mixKey(s.DH(rs))
+            re = try PublicKey(from: buffer)
+            symmetricState.mixHash(re!)
+            symmetricState.mixKey(try s ^ re!)
+            symmetricState.mixKey(try s ^ rs)
         }
         
-        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+        public func write<M: MutableDataProtocol>(to buffer: inout M) throws {
             operation(order: 2)
-            buffer.append(contentsOf: e.publicKey.data)
-            symmetricState.mixHash(e.publicKey.data)
-            symmetricState.mixKey(e.DH(re!))
-            symmetricState.mixKey(e.DH(rs))
+            buffer.append(e)
+            symmetricState.mixHash(e)
+            symmetricState.mixKey(try e ^ re!)
+            symmetricState.mixKey(try e ^ rs)
         }
     }
 }
@@ -301,18 +303,18 @@ extension Initiator {
             super.init(.initiator, "NK")
         }
         
-        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+        public func write<M: MutableDataProtocol>(to buffer: inout M) throws {
             operation(order: 1)
-            buffer.append(contentsOf: e.publicKey.data)
-            symmetricState.mixHash(e.publicKey.data)
-            symmetricState.mixKey(e.DH(rs))
+            buffer.append(e)
+            symmetricState.mixHash(e)
+            symmetricState.mixKey(try e ^ rs)
         }
         
-        public func read<D: DataProtocol>(from buffer: D) {
+        public func read<D: DataProtocol>(from buffer: D) throws {
             operation(order: 2)
-            let re = PublicKey(from: buffer)
-            symmetricState.mixHash(re.data)
-            symmetricState.mixKey(e.DH(re))
+            let re = try PublicKey(from: buffer)
+            symmetricState.mixHash(re)
+            symmetricState.mixKey(try e ^ re)
         }
     }
 }
@@ -328,21 +330,22 @@ extension Responder {
             super.init(.responder, "NK")
         }
         
-        public func read<D: DataProtocol>(from buffer: D) {
+        public func read<D: DataProtocol>(from buffer: D) throws {
             operation(order: 1)
-            re = PublicKey(from: buffer)
-            symmetricState.mixHash(re!.data)
-            symmetricState.mixKey(s.DH(re!))
+            re = try PublicKey(from: buffer)
+            symmetricState.mixHash(re!)
+            symmetricState.mixKey(try s ^ re!)
         }
         
-        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+        public func write<M: MutableDataProtocol>(to buffer: inout M) throws {
             operation(order: 2)
-            buffer.append(contentsOf: e.publicKey.data)
-            symmetricState.mixHash(e.publicKey.data)
-            symmetricState.mixKey(e.DH(re!))
+            buffer.append(e)
+            symmetricState.mixHash(e)
+            symmetricState.mixKey(try e ^ re!)
         }
     }
 }
+
 
 // NX:
 //  -> e
@@ -360,18 +363,18 @@ extension Initiator {
         
         public func write<M: MutableDataProtocol>(to buffer: inout M) {
             operation(order: 1)
-            buffer.append(contentsOf: e.publicKey.data)
-            symmetricState.mixHash(e.publicKey.data)
+            buffer.append(e)
+            symmetricState.mixHash(e)
         }
         
         public func read<D: DataProtocol>(from buffer: D) throws {
             longOperation(order: 2)
-            let re = PublicKey(from: buffer)
-            symmetricState.mixHash(re.data)
-            symmetricState.mixKey(e.DH(re))
+            let re = try PublicKey(from: buffer)
+            symmetricState.mixHash(re)
+            symmetricState.mixKey(try e ^ re)
             let suffix = buffer.suffix(buffer.count - PublicKey.length)
-            rs = PublicKey(from: try symmetricState.decryptAndHash(suffix))
-            symmetricState.mixKey(e.DH(rs!))
+            rs = try PublicKey(from: try symmetricState.decryptAndHash(suffix))
+            symmetricState.mixKey(try e ^ rs!)
         }
     }
 }
@@ -387,19 +390,19 @@ extension Responder {
             super.init(.responder, "NX")
         }
         
-        public func read<D: DataProtocol>(from buffer: D) {
+        public func read<D: DataProtocol>(from buffer: D) throws {
             operation(order: 1)
-            re = PublicKey(from: buffer)
-            symmetricState.mixHash(re!.data)
+            re = try PublicKey(from: buffer)
+            symmetricState.mixHash(re!)
         }
         
-        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+        public func write<M: MutableDataProtocol>(to buffer: inout M) throws {
             longOperation(order: 2)
-            buffer.append(contentsOf: e.publicKey.data)
-            symmetricState.mixHash(e.publicKey.data)
-            symmetricState.mixKey(e.DH(re!))
-            symmetricState.encryptAndHash(s.publicKey.data, into: &buffer)
-            symmetricState.mixKey(s.DH(re!))
+            buffer.append(e)
+            symmetricState.mixHash(e)
+            symmetricState.mixKey(try e ^ re!)
+            symmetricState.encryptAndHash(s, into: &buffer)
+            symmetricState.mixKey(try s ^ re!)
         }
     }
 }
@@ -425,24 +428,24 @@ extension Initiator {
         
         public func firstWrite<M: MutableDataProtocol>(to buffer: inout M) {
             operation(order: 1)
-            buffer.append(contentsOf: e.publicKey.data)
-            symmetricState.mixHash(e.publicKey.data)
+            buffer.append(e)
+            symmetricState.mixHash(e)
         }
         
         public func read<D: DataProtocol>(from buffer: D) throws {
             longOperation(order: 2)
-            re = PublicKey(from: buffer)
-            symmetricState.mixHash(re!.data)
-            symmetricState.mixKey(e.DH(re!))
+            re = try PublicKey(from: buffer)
+            symmetricState.mixHash(re!)
+            symmetricState.mixKey(try e ^ re!)
             let suffix = buffer.suffix(buffer.count - PublicKey.length)
-            rs = PublicKey(from: try symmetricState.decryptAndHash(suffix))
-            symmetricState.mixKey(e.DH(rs!))
+            rs = try PublicKey(from: try symmetricState.decryptAndHash(suffix))
+            symmetricState.mixKey(try e ^ rs!)
         }
         
-        public func secondWrite<M: MutableDataProtocol>(to buffer: inout M) {
+        public func secondWrite<M: MutableDataProtocol>(to buffer: inout M) throws {
             operation(order: 3)
-            symmetricState.encryptAndHash(s.publicKey.data, into: &buffer)
-            symmetricState.mixKey(s.DH(re!))
+            symmetricState.encryptAndHash(s, into: &buffer)
+            symmetricState.mixKey(try s ^ re!)
         }
     }
 }
@@ -460,28 +463,29 @@ extension Responder {
             super.init(.responder, "XX")
         }
         
-        public func firstRead<D: DataProtocol>(from buffer: D) {
+        public func firstRead<D: DataProtocol>(from buffer: D) throws {
             operation(order: 1)
-            re = PublicKey(from: buffer)
-            symmetricState.mixHash(re!.data)
+            re = try PublicKey(from: buffer)
+            symmetricState.mixHash(re!)
         }
         
-        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+        public func write<M: MutableDataProtocol>(to buffer: inout M) throws {
             longOperation(order: 2)
-            buffer.append(contentsOf: e.publicKey.data)
-            symmetricState.mixHash(e.publicKey.data)
-            symmetricState.mixKey(e.DH(re!))
-            symmetricState.encryptAndHash(s.publicKey.data, into: &buffer)
-            symmetricState.mixKey(s.DH(re!))
+            buffer.append(e)
+            symmetricState.mixHash(e)
+            symmetricState.mixKey(try e ^ re!)
+            symmetricState.encryptAndHash(s, into: &buffer)
+            symmetricState.mixKey(try s ^ re!)
         }
         
         public func secondRead<D: DataProtocol>(from buffer: D) throws {
             operation(order: 3)
-            rs = PublicKey(from: try symmetricState.decryptAndHash(buffer))
-            symmetricState.mixKey(e.DH(rs!))
+            rs = try PublicKey(from: try symmetricState.decryptAndHash(buffer))
+            symmetricState.mixKey(try e ^ rs!)
         }
     }
 }
+
 
 // IK:
 //  <- s
@@ -502,21 +506,21 @@ extension Initiator {
             super.init(.initiator, "IK")
         }
         
-        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+        public func write<M: MutableDataProtocol>(to buffer: inout M) throws {
             longOperation(order: 1)
-            buffer.append(contentsOf: e.publicKey.data)
-            symmetricState.mixHash(e.publicKey.data)
-            symmetricState.mixKey(e.DH(rs))
-            symmetricState.encryptAndHash(s.publicKey.data, into: &buffer)
-            symmetricState.mixKey(s.DH(rs))
+            buffer.append(e)
+            symmetricState.mixHash(e)
+            symmetricState.mixKey(try e ^ rs)
+            symmetricState.encryptAndHash(s, into: &buffer)
+            symmetricState.mixKey(try s ^ rs)
         }
         
-        public func read<D: DataProtocol>(from buffer: D) {
+        public func read<D: DataProtocol>(from buffer: D) throws {
             operation(order: 2)
-            let re = PublicKey(from: buffer)
-            symmetricState.mixHash(re.data)
-            symmetricState.mixKey(e.DH(re))
-            symmetricState.mixKey(s.DH(re))
+            let re = try PublicKey(from: buffer)
+            symmetricState.mixHash(re)
+            symmetricState.mixKey(try e ^ re)
+            symmetricState.mixKey(try s ^ re)
         }
     }
 }
@@ -536,20 +540,20 @@ extension Responder {
         
         public func read<D: DataProtocol>(from buffer: D) throws {
             longOperation(order: 1)
-            re = PublicKey(from: buffer)
-            symmetricState.mixHash(re!.data)
-            symmetricState.mixKey(s.DH(re!))
+            re = try PublicKey(from: buffer)
+            symmetricState.mixHash(re!)
+            symmetricState.mixKey(try s ^ re!)
             let suffix = buffer.suffix(buffer.count - PublicKey.length)
-            rs = PublicKey(from: try symmetricState.decryptAndHash(suffix))
-            symmetricState.mixKey(s.DH(rs!))
+            rs = try PublicKey(from: try symmetricState.decryptAndHash(suffix))
+            symmetricState.mixKey(try s ^ rs!)
         }
         
-        public func write<M: MutableDataProtocol>(to buffer: inout M) {
+        public func write<M: MutableDataProtocol>(to buffer: inout M) throws {
             operation(order: 2)
-            buffer.append(contentsOf: e.publicKey.data)
-            symmetricState.mixHash(e.publicKey.data)
-            symmetricState.mixKey(e.DH(re!))
-            symmetricState.mixKey(e.DH(rs!))
+            buffer.append(e)
+            symmetricState.mixHash(e)
+            symmetricState.mixKey(try e ^ re!)
+            symmetricState.mixKey(try e ^ rs!)
         }
     }
 }

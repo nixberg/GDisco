@@ -2,12 +2,39 @@
   "object": {
     "pins": [
       {
-        "package": "monocypher-swift",
-        "repositoryURL": "https://github.com/nixberg/monocypher-swift",
+        "package": "Clibsodium",
+        "repositoryURL": "https://github.com/tiwoc/Clibsodium",
         "state": {
           "branch": null,
-          "revision": "88664aad3cea91a0b5072beb4f0061695d507ec2",
-          "version": "0.0.2"
+          "revision": "2ac72772aae26b2da0b15c253d9bb79ba452f66a",
+          "version": "1.0.0"
+        }
+      },
+      {
+        "package": "Gimli",
+        "repositoryURL": "https://github.com/nixberg/Gimli",
+        "state": {
+          "branch": "master",
+          "revision": "dafb70fcf0253274a5b2f8fa7da30abb1aca9996",
+          "version": null
+        }
+      },
+      {
+        "package": "GStrobe",
+        "repositoryURL": "https://github.com/nixberg/GStrobe",
+        "state": {
+          "branch": "master",
+          "revision": "d0f7d974fc480850c907c91f05a7c7626e608b1d",
+          "version": null
+        }
+      },
+      {
+        "package": "Ristretto255",
+        "repositoryURL": "https://github.com/nixberg/Ristretto255",
+        "state": {
+          "branch": "master",
+          "revision": "2794d2384df217dc992f70e585419958364ee877",
+          "version": null
         }
       }
     ]

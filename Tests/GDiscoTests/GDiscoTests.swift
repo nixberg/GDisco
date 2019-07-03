@@ -1,4 +1,5 @@
 import XCTest
+import Ristretto255
 @testable import GDisco
 
 final class GDiscoTests: XCTestCase {
@@ -9,8 +10,8 @@ final class GDiscoTests: XCTestCase {
         let a = i.finalize()
         let b = r.finalize()
         
-        let m1 = "Hi, Bob!".data(using: .utf8)!
-        let m2 = "Also ...".data(using: .utf8)!
+        let m1 = "One".data(using: .utf8)!
+        let m2 = "Two".data(using: .utf8)!
 
         var e1 = Data()
         var e2 = Data()
@@ -42,8 +43,8 @@ final class GDiscoTests: XCTestCase {
         let responder = Responder.K(my: rStatic, their: iStatic.publicKey)
         
         var networkBuffer = Data()
-        initiator.write(to: &networkBuffer)
-        responder.read(from: networkBuffer)
+        try! initiator.write(to: &networkBuffer)
+        try! responder.read(from: networkBuffer)
                 
         greet(initiator, responder)
     }
@@ -53,8 +54,8 @@ final class GDiscoTests: XCTestCase {
         let responder = Responder.N(my: rStatic)
         
         var networkBuffer = Data()
-        initiator.write(to: &networkBuffer)
-        responder.read(from: networkBuffer)
+        try! initiator.write(to: &networkBuffer)
+        try! responder.read(from: networkBuffer)
         
         greet(initiator, responder)
     }
@@ -64,25 +65,25 @@ final class GDiscoTests: XCTestCase {
         let responder = Responder.X(my: rStatic)
         
         var networkBuffer = Data()
-        initiator.write(to: &networkBuffer)
+        try! initiator.write(to: &networkBuffer)
         try! responder.read(from: networkBuffer)
         
         greet(initiator, responder)
     }
     
     func testNNpsk2() {
-        let psk = Data.random(count: 32)!
+        let psk = (0..<32).map { _ in UInt8.random(in: 0...255) }
         
         let initiator = Initiator.NNpsk2(psk: psk)
         let responder = Responder.NNpsk2(psk: psk)
         
         var networkBuffer = Data()
         initiator.write(to: &networkBuffer)
-        responder.read(from: networkBuffer)
+        try! responder.read(from: networkBuffer)
         
         networkBuffer.removeAll(keepingCapacity: true)
-        responder.write(to: &networkBuffer)
-        initiator.read(from: networkBuffer)
+        try! responder.write(to: &networkBuffer)
+        try! initiator.read(from: networkBuffer)
 
         greet(initiator, responder)
     }
@@ -92,12 +93,12 @@ final class GDiscoTests: XCTestCase {
         let responder = Responder.KK(my: rStatic, their: iStatic.publicKey)
         
         var networkBuffer = Data()
-        initiator.write(to: &networkBuffer)
-        responder.read(from: networkBuffer)
+        try! initiator.write(to: &networkBuffer)
+        try! responder.read(from: networkBuffer)
         
         networkBuffer.removeAll(keepingCapacity: true)
-        responder.write(to: &networkBuffer)
-        initiator.read(from: networkBuffer)
+        try! responder.write(to: &networkBuffer)
+        try! initiator.read(from: networkBuffer)
         
         greet(initiator, responder)
     }
@@ -107,12 +108,12 @@ final class GDiscoTests: XCTestCase {
         let responder = Responder.NK(my: rStatic)
         
         var networkBuffer = Data()
-        initiator.write(to: &networkBuffer)
-        responder.read(from: networkBuffer)
+        try! initiator.write(to: &networkBuffer)
+        try! responder.read(from: networkBuffer)
      
         networkBuffer.removeAll(keepingCapacity: true)
-        responder.write(to: &networkBuffer)
-        initiator.read(from: networkBuffer)
+        try! responder.write(to: &networkBuffer)
+        try! initiator.read(from: networkBuffer)
         
         greet(initiator, responder)
     }
@@ -123,10 +124,10 @@ final class GDiscoTests: XCTestCase {
         
         var networkBuffer = Data()
         initiator.write(to: &networkBuffer)
-        responder.read(from: networkBuffer)
+        try! responder.read(from: networkBuffer)
      
         networkBuffer.removeAll(keepingCapacity: true)
-        responder.write(to: &networkBuffer)
+        try! responder.write(to: &networkBuffer)
         try! initiator.read(from: networkBuffer)
         
         greet(initiator, responder)
@@ -138,14 +139,14 @@ final class GDiscoTests: XCTestCase {
 
         var networkBuffer = Data()
         initiator.firstWrite(to: &networkBuffer)
-        responder.firstRead(from: networkBuffer)
+        try! responder.firstRead(from: networkBuffer)
      
         networkBuffer.removeAll(keepingCapacity: true)
-        responder.write(to: &networkBuffer)
+        try! responder.write(to: &networkBuffer)
         try! initiator.read(from: networkBuffer)
         
         networkBuffer.removeAll(keepingCapacity: true)
-        initiator.secondWrite(to: &networkBuffer)
+        try! initiator.secondWrite(to: &networkBuffer)
         try! responder.secondRead(from: networkBuffer)
         
         greet(initiator, responder)
@@ -156,12 +157,12 @@ final class GDiscoTests: XCTestCase {
         let responder = Responder.IK(my: rStatic)
         
         var networkBuffer = Data()
-        initiator.write(to: &networkBuffer)
+        try! initiator.write(to: &networkBuffer)
         try! responder.read(from: networkBuffer)
         
         networkBuffer.removeAll(keepingCapacity: true)
-        responder.write(to: &networkBuffer)
-        initiator.read(from: networkBuffer)
+        try! responder.write(to: &networkBuffer)
+        try! initiator.read(from: networkBuffer)
         
         greet(initiator, responder)
     }
